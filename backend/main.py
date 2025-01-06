@@ -109,10 +109,18 @@ def generate_article(input_data: GenerateArticleInput):
     keyword = input_data.keyword
     title = input_data.title
 
-    # Implement your article generation logic here
-    # For now, we'll just return a success message
-    content = f"# {title}\n\nThis is an article about {keyword}."
-    return {"message": f"Article '{title}' generated successfully with keyword '{keyword}'.", "content": content}
+    try:
+        # Generate the blog post
+        output_file = "generated_blog_post.md"
+        create_blog_post(llm=llm, keyword=keyword, title=title, output_file=output_file)
+
+        # Read the generated blog post content
+        with open(output_file, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        return {"message": f"Article '{title}' generated successfully with keyword '{keyword}'.", "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Function to remove duplicate questions
 def remove_duplicate_questions(questions, similarity_threshold=0.75):
