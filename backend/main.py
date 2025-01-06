@@ -31,7 +31,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # import logging
 # logging.basicConfig(level=logging.DEBUG)
 from fastapi.middleware.cors import CORSMiddleware
-
+import logging
+from generator import create_blog_post, llm
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -63,7 +64,7 @@ origins = [
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # List of allowed origins
+    allow_origins=["*"],  # List of allowed origins
     allow_credentials=True,  # Allow cookies and authentication headers
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
@@ -120,6 +121,7 @@ def generate_article(input_data: GenerateArticleInput):
 
         return {"message": f"Article '{title}' generated successfully with keyword '{keyword}'.", "content": content}
     except Exception as e:
+        logging.error(f"Error generating article: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Function to remove duplicate questions
