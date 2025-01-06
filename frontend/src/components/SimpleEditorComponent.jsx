@@ -1,18 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 import EditorJS from '@editorjs/editorjs';
+import { markdownToEditorJsBlocks } from '../utils/markdownToEditorJsBlocks';
 
 const SimpleEditorComponent = ({ initialContent }) => {
     const editorInstance = useRef(null);
 
     useEffect(() => {
+        const blocks = markdownToEditorJsBlocks(initialContent);
+
         editorInstance.current = new EditorJS({
             holder: 'editorjs',
             data: {
-                blocks: [
+                blocks: blocks.length ? blocks : [
                     {
                         type: 'paragraph',
                         data: {
-                            text: initialContent || 'Start writing your article here...'
+                            text: 'Start writing your article here...'
                         }
                     }
                 ]

@@ -17,6 +17,7 @@ const GenerateArticle = ({ onBack }) => {
         try {
             const response = await axios.post('http://localhost:8000/api/generate-article', { keyword, title });
             setSuccess(response.data.message);
+            setEditorContent(response.data.content); // Assuming the backend sends the markdown content in 'content'
         } catch (err) {
             setError(err.message || "An error occurred during article generation.");
         } finally {
