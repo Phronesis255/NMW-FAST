@@ -100,6 +100,19 @@ except Exception as e:
     print(f"Error loading Glove model: {e}")
     glove_embeddings_index = {}
 
+class GenerateArticleInput(BaseModel):
+    keyword: str
+    title: str
+
+@app.post("/api/generate-article")
+def generate_article(input_data: GenerateArticleInput):
+    keyword = input_data.keyword
+    title = input_data.title
+
+    # Implement your article generation logic here
+    # For now, we'll just return a success message
+    content = f"# {title}\n\nThis is an article about {keyword}."
+    return {"message": f"Article '{title}' generated successfully with keyword '{keyword}'.", "content": content}
 
 # Function to remove duplicate questions
 def remove_duplicate_questions(questions, similarity_threshold=0.75):

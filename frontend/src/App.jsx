@@ -5,6 +5,7 @@ import AnalysisResults from './components/AnalysisResults';
 import EditorComponent from './components/EditorComponent';
 import Loading from './components/Loading';
 import SeoScale from './components/SeoScale';
+import GenerateArticle from './components/GenerateArticle';
 import axios from 'axios';
 
 // Calculate term metrics ...
@@ -25,6 +26,7 @@ const App = () => {
     const [error, setError] = useState(null);
     const [showEditor, setShowEditor] = useState(false);
     const [showSeoScale, setShowSeoScale] = useState(false);
+    const [showGenerateArticle, setShowGenerateArticle] = useState(false);
     const editorContent = useRef("");
 
     const handleSearch = async (keyword) => {
@@ -33,6 +35,7 @@ const App = () => {
         setResults(null);
         setShowEditor(false);
         setShowSeoScale(false);
+        setShowGenerateArticle(false);
         try {
             console.log("[DEBUG] Fetching analysis results...");
             const response = await axios.post('http://localhost:8000/api/analyze', { keyword });
@@ -59,11 +62,22 @@ const App = () => {
         // Show the SEO @ SCALE screen
         setShowSeoScale(true);
         setShowEditor(false);
+        setShowGenerateArticle(false);
     };
 
     const handleBackFromSeoScale = () => {
         // Return to the main screen (hide SEO @ SCALE)
         setShowSeoScale(false);
+    };
+
+    const handleGenerateArticle = () => {
+        setShowGenerateArticle(true);
+        setShowSeoScale(false);
+        setShowEditor(false);
+    };
+
+    const handleBackFromGenerateArticle = () => {
+        setShowGenerateArticle(false);
     };
 
     const tfidfTerms = results?.tfidf_terms?.map((termObj) => termObj.word) || [];
@@ -86,10 +100,20 @@ const App = () => {
                 <SeoScale onBack={handleBackFromSeoScale} />
             )}
 
+            {showGenerateArticle && (
+                <GenerateArticle onBack={handleBackFromGenerateArticle} />
+            )}
+
             {/* If not showing SEO @ SCALE and not showing editor */}
-            {!showSeoScale && !showEditor && (
+            {!showSeoScale && !showGenerateArticle && !showEditor && (
                 <>
                     <SearchForm onSearch={handleSearch} onSeoScale={handleSeoScale} />
+                    <button
+                        onClick={handleGenerateArticle}
+                        className="btn btn-primary mt-6"
+                    >
+                        Generate a New Article
+                    </button>
                     {loading && <Loading />}
                     {error && <div className="text-red-500 mt-4">Error: {error}</div>}
                     {results && (
@@ -107,7 +131,7 @@ const App = () => {
             )}
 
             {/* If showing editor */}
-            {!showSeoScale && showEditor && (
+            {!showSeoScale && !showGenerateArticle && showEditor && (
                 <>
                     <EditorComponent
                         tfidfTerms={tfidfTerms}
