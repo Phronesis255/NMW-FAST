@@ -19,3 +19,4 @@ const DrawerSidebar = ({ open, onClose }) => {
 };
 
 export default DrawerSidebar;
+// This component is a simple drawer sidebar that contains a GenerateArticle component. The GenerateArticle component will be used to generate an article based on the analysis results. The drawer sidebar is opened and closed using the open and onClose props passed to it.
