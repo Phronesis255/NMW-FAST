@@ -293,7 +293,7 @@ def create_blog_post(
     
     for section in sections:
         # Add the section heading
-        blog_post_markdown.append(section["heading"])
+        # blog_post_markdown.append(section["heading"])
         
         # Combine the section heading + subsections as "section_outline"
         # so the LLM knows the overall plan for this section.
@@ -328,7 +328,7 @@ def create_blog_post(
     flesch_kincaid_ease = compute_flesch_kincaid_ease(final_blog_post)
     gunning_fog = compute_gunning_fog(final_blog_post)
     keyword_density = compute_keyword_density(final_blog_post, keyword)
-    final_blog_post_length = len(final_blog_post)
+    final_blog_post_length = len(final_blog_post.split())
     total_generation_time = time.time() - t0  # Total time from outline generation to blog post creation
 
     # 8) Save the blog post data to the database
@@ -366,19 +366,10 @@ def create_blog_post(
     # Commit the transaction and close the connection
     conn.commit()
     conn.close()
+    outline_id = cursor.lastrowid
 
     print("\nBlog post data saved to 'generator.db' in 'blog_posts' table.")
-    return {
-        "outline_id": outline_id,
-        "final_blog_post_length": final_blog_post_length,
-        "total_generation_time": total_generation_time,
-        "model_name": model_name,
-        "similarity_to_title": similarity_to_title,
-        "reading_difficulty_grade": reading_difficulty_grade,
-        "keyword_density": keyword_density,
-        "gunning_fog": gunning_fog
-    }
-
+    return outline_id
 
 def add_columns_if_missing():
     conn = sqlite3.connect('generator.db')

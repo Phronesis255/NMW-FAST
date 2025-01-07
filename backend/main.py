@@ -113,7 +113,7 @@ def generate_article(input_data: GenerateArticleInput):
         # Generate the blog post
         output_file = "generated_blog_post.md"
         outline_id = create_blog_post(llm=llm, keyword=keyword, title=title, output_file=output_file)
-
+        print(outline_id)
         # Read the generated blog post content
         with open(output_file, "r", encoding="utf-8") as f:
             content = f.read()
