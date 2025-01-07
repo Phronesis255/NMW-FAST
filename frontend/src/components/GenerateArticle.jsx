@@ -145,48 +145,39 @@ const GenerateArticle = ({ onBack }) => {
       ) : (
         <div className="card w-full max-w-5xl mx-auto shadow-xl bg-base-100">
           <div className="card-body">
-            <SimpleEditorComponent initialContent={editorContent} />
-
             {/* If metrics exist, display them as DaisyUI badges */}
             {metrics && (
               <div className="flex flex-wrap gap-2 mt-6">
                 {metrics.final_blog_post_length !== undefined && (
-                  <div className="badge badge-outline">
-                    Length: {metrics.final_blog_post_length}
-                  </div>
-                )}
-                {metrics.total_generation_time !== undefined && (
-                  <div className="badge badge-secondary">
-                    Time: {metrics.total_generation_time.toFixed(2)} s
+                  <div className="badge text-secondary-content bg-secondary badge-outline">
+                    Word Count: {metrics.final_blog_post_length}
                   </div>
                 )}
                 {metrics.model_name && (
-                  <div className="badge badge-ghost">
+                  <div className="badge text-secondary-content bg-secondary badge-outline">
                     Model: {metrics.model_name}
                   </div>
                 )}
                 {metrics.similarity_to_title !== undefined && (
-                  <div className="badge badge-info">
+                  <div className="badge text-secondary-content bg-secondary badge-outline">
                     Similarity: {metrics.similarity_to_title.toFixed(2)}%
                   </div>
                 )}
                 {metrics.reading_difficulty_grade !== undefined && (
-                  <div className="badge badge-accent">
+                  <div className="badge text-secondary-content bg-secondary badge-outline">
                     Reading Grade: {metrics.reading_difficulty_grade.toFixed(2)}
                   </div>
                 )}
                 {metrics.keyword_density !== undefined && (
-                  <div className="badge badge-primary">
+                  <div className="badge text-primary-content bg-primary badge-outline">
                     Keyword Density: {metrics.keyword_density.toFixed(2)}%
-                  </div>
-                )}
-                {metrics.gunning_fog !== undefined && (
-                  <div className="badge badge-outline">
-                    Gunning Fog: {metrics.gunning_fog.toFixed(2)}
                   </div>
                 )}
               </div>
             )}
+
+            <SimpleEditorComponent initialContent={editorContent} />
+
 
             <div className="mt-6">
               <button className="btn btn-accent" onClick={onBack}>
