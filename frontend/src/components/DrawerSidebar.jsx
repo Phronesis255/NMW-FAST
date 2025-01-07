@@ -1,22 +1,23 @@
 // src/components/DrawerSidebar.jsx
 import React from 'react';
-import { Drawer, Button, Box } from '@mui/material';
 import GenerateArticle from './GenerateArticle';
 
 const DrawerSidebar = ({ open, onClose }) => {
     return (
-        <Drawer anchor="right" open={open} onClose={onClose}>
-            <Box
-                sx={{ width: 250 }}
-                role="presentation"
-                onClick={onClose}
-                onKeyDown={onClose}
-            >
-                <GenerateArticle />
-            </Box>
-        </Drawer>
+        <div className={`drawer ${open ? 'drawer-open' : ''}`}>
+            <input id="my-drawer" type="checkbox" className="drawer-toggle" checked={open} readOnly />
+            <div className="drawer-content">
+                {/* Page content here */}
+                <label htmlFor="my-drawer" className="btn btn-primary" onClick={onClose}>Close</label>
+            </div>
+            <div className="drawer-side">
+                <label htmlFor="my-drawer" className="drawer-overlay" onClick={onClose}></label>
+                <div className="menu p-4 w-80 bg-base-100 text-base-content">
+                    <GenerateArticle />
+                </div>
+            </div>
+        </div>
     );
 };
 
 export default DrawerSidebar;
-// This component is a simple drawer sidebar that contains a GenerateArticle component. The GenerateArticle component will be used to generate an article based on the analysis results. The drawer sidebar is opened and closed using the open and onClose props passed to it.
