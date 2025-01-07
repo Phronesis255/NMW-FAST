@@ -368,12 +368,18 @@ def create_blog_post(
     conn.close()
 
     print("\nBlog post data saved to 'generator.db' in 'blog_posts' table.")
-    print(f"Similarity to Title: {similarity_to_title:.2f}")
-    print(f"Reading Difficulty Grade: {reading_difficulty_grade:.2f}")
-    print(f"Flesch-Kincaid Ease: {flesch_kincaid_ease:.2f}")
-    print(f"Gunning Fog: {gunning_fog:.2f}")
-    print(f"Keyword Density: {keyword_density:.2f}%")
-    print(f"Total word count: {final_blog_post_length}")
+    return {
+        "outline_id": outline_id,
+        "final_blog_post_length": final_blog_post_length,
+        "total_generation_time": total_generation_time,
+        "model_name": model_name,
+        "similarity_to_title": similarity_to_title,
+        "reading_difficulty_grade": reading_difficulty_grade,
+        "keyword_density": keyword_density,
+        "gunning_fog": gunning_fog
+    }
+
+
 def add_columns_if_missing():
     conn = sqlite3.connect('generator.db')
     cursor = conn.cursor()

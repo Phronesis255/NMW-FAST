@@ -31,6 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from generator import create_blog_post, llm
+import sqlite3
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -111,13 +112,44 @@ def generate_article(input_data: GenerateArticleInput):
     try:
         # Generate the blog post
         output_file = "generated_blog_post.md"
-        create_blog_post(llm=llm, keyword=keyword, title=title, output_file=output_file)
+        outline_id = create_blog_post(llm=llm, keyword=keyword, title=title, output_file=output_file)
 
         # Read the generated blog post content
         with open(output_file, "r", encoding="utf-8") as f:
             content = f.read()
+        conn = sqlite3.connect('generator.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT final_blog_post_length, total_generation_time, llm_model,
+                similarity_to_title, reading_difficulty_grade, keyword_density, gunning_fog
+            FROM blog_posts
+            WHERE outline_id = ?
+            ORDER BY rowid DESC
+            LIMIT 1
+        ''', (outline_id,))
+        row = cursor.fetchone()
+        conn.close()
 
-        return {"message": f"Article '{title}' generated successfully with keyword '{keyword}'.", "content": content}
+        # Convert row to a dictionary
+        if row is not None:
+            metrics = {
+                "final_blog_post_length": row[0],
+                "total_generation_time": row[1],
+                "model_name": row[2],
+                "similarity_to_title": row[3],
+                "reading_difficulty_grade": row[4],
+                "keyword_density": row[5],
+                "gunning_fog": row[6],
+            }
+        else:
+            metrics = {}
+
+        return {
+            "message": f"Article '{title}' generated successfully with keyword '{keyword}'.",
+            "content": content,
+            "metrics": metrics,
+        }
+
     except Exception as e:
         logging.error(f"Error generating article: {e}")
         raise HTTPException(status_code=500, detail=str(e))
