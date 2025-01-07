@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import SimpleEditorComponent from './SimpleEditorComponent';
+import EditorComponent from './EditorComponent';
 
 const GenerateArticle = ({ onBack }) => {
     const [keyword, setKeyword] = useState('');
@@ -59,7 +59,7 @@ const GenerateArticle = ({ onBack }) => {
                     {success && <div className="text-green-500 mt-2">{success}</div>}
                 </form>
             ) : (
-                <SimpleEditorComponent initialContent={editorContent} />
+                <EditorComponent initialContent={editorContent} />
             )}
             <button className="btn btn-secondary mt-4" onClick={onBack}>
                 Back
