@@ -40,7 +40,7 @@ const App = () => {
     };
 
     return (
-        <div className="p-6">
+        <div className="p-12">
             {page === 'home' && <HomePage onSelect={handleSelect} />}
             {page === 'generate' && <GenerateArticle />}
             {page === 'optimize' && (
