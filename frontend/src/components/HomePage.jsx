@@ -2,7 +2,7 @@ import React from 'react';
 
 const HomePage = ({ onSelect }) => {
     return (
-        <div className="flex flex-col justify-center items-center h-screen">
+        <div className="flex flex-col justify-center items-center h-screen bg-accent">
             <h1 className="text-4xl font-bold mb-12">What are we making today?</h1>
             <div 
                 className="card w-96 bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-xl mb-4 cursor-pointer transform transition-transform hover:scale-105" 
