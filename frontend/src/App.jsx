@@ -55,17 +55,62 @@ const App = () => {
     };
 
     return (
-        <div>
-            <SearchForm onSearch={handleSearch} />
-            <Button variant="contained" color="primary" onClick={toggleDrawer(true)}>
-                Generate a New Article
-            </Button>
-            <DrawerSidebar open={drawerOpen} onClose={toggleDrawer(false)} />
-            {loading && <Loading />}
-            {error && <div>Error: {error}</div>}
-            {results && <AnalysisResults results={results} />}
-            {showEditor && <EditorComponent content={editorContent.current} />}
-            {showSeoScale && <SeoScale />}
+        <div className="container mx-auto p-6">
+            <h1 className="text-3xl font-bold mb-6 text-left">Start optimizing your content</h1>
+
+            {/* If showing SEO @ SCALE screen */}
+            {showSeoScale && (
+                <SeoScale onBack={handleBackFromSeoScale} />
+            )}
+
+            {showGenerateArticle && (
+                <GenerateArticle onBack={handleBackFromGenerateArticle} />
+            )}
+
+            {/* If not showing SEO @ SCALE and not showing editor */}
+            {!showSeoScale && !showGenerateArticle && !showEditor && (
+                <>
+                    <SearchForm onSearch={handleSearch} onSeoScale={handleSeoScale} />
+                    <button
+                        onClick={handleGenerateArticle}
+                        className="btn btn-accent mt-6"
+                    >
+                        Generate a New Article
+                    </button>
+                    {loading && <Loading />}
+                    {error && <div className="text-red-500 mt-4">Error: {error}</div>}
+                    {results && (
+                        <>
+                            <AnalysisResults results={results} />
+                            <button
+                                onClick={toggleEditor}
+                                className="btn btn-primary mt-6"
+                            >
+                                Go to Editor
+                            </button>
+                        </>
+                    )}
+                </>
+            )}
+
+            {/* If showing editor */}
+            {!showSeoScale && !showGenerateArticle && showEditor && (
+                <>
+                    <EditorComponent
+                        tfidfTerms={tfidfTerms}
+                        targetScores={targetScores}
+                        onChange={handleEditorChange}
+                    />
+                    <div className="flex justify-between mt-6">
+                        <button
+                            onClick={toggleEditor}
+                            className="btn btn-secondary"
+                        >
+                            Back to Analysis
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     );
 };

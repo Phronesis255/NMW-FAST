@@ -16,9 +16,9 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
-const EditorComponent = ({ tfidfTerms = [], targetScores = {}, onChange }) => {
+const EditorComponent = ({ initialContent, tfidfTerms = [], targetScores = {}, onChange }) => {
     const editorInstance = useRef(null);
-    const [editorContent, setEditorContent] = useState(""); 
+    const [editorContent, setEditorContent] = useState(initialContent || ""); 
     const [termOccurrences, setTermOccurrences] = useState({}); 
     const [optimizationScore, setOptimizationScore] = useState(0);
     const [termMetrics, setTermMetrics] = useState([]);
@@ -73,7 +73,7 @@ const EditorComponent = ({ tfidfTerms = [], targetScores = {}, onChange }) => {
                         {
                             type: 'paragraph',
                             data: {
-                                text: '',
+                                text: initialContent || '',
                             },
                         },
                     ],
@@ -99,7 +99,7 @@ const EditorComponent = ({ tfidfTerms = [], targetScores = {}, onChange }) => {
                 editorInstance.current = null;
             }
         };
-    }, []);
+    }, [initialContent]);
 
     // Call parent's onChange whenever editorContent updates
     useEffect(() => {
