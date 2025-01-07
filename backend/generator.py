@@ -20,8 +20,8 @@ nltk.download('punkt')
 # --------------------------------------------
 # llm_model = "HG-Qwen-2.5-72B-Instruct"
 # llm_model = "HG-Llama-3.2-3B-Instruct"
-llm_model = "gpt-4o-mini"
-# llm_model = "gpt-4o"
+# llm_model = "gpt-4o-mini"
+llm_model = "gpt-4o"
 # llm_model = "o1-mini"
 
 #----------------------------------------------

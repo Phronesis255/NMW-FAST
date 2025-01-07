@@ -5,8 +5,6 @@ export const markdownToEditorJsBlocks = (markdown) => {
     const blocks = [];
 
     const parseElement = (element) => {
-        if (!element) return;
-
         if (typeof element === 'string') {
             blocks.push({
                 type: 'paragraph',

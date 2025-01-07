@@ -28,6 +28,8 @@ import os
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+# import logging
+# logging.basicConfig(level=logging.DEBUG)
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from generator import create_blog_post, llm
