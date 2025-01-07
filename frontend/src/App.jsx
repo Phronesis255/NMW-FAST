@@ -110,7 +110,7 @@ const App = () => {
                     <SearchForm onSearch={handleSearch} onSeoScale={handleSeoScale} />
                     <button
                         onClick={handleGenerateArticle}
-                        className="btn btn-primary mt-6"
+                        className="btn btn-accent mt-6"
                     >
                         Generate a New Article
                     </button>
