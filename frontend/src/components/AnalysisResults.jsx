@@ -1,3 +1,4 @@
+// src/components/AnalysisResults.jsx
 import React from 'react';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -19,7 +20,7 @@ ChartJS.register(
     Legend
 );
 
-const AnalysisResults = ({ results }) => {
+const AnalysisResults = ({ results, onGoToEditor }) => {
     if (!results) {
         return <div className="alert alert-error shadow-lg">No results to display.</div>;
     }
@@ -33,14 +34,14 @@ const AnalysisResults = ({ results }) => {
                 label: 'TF-IDF Scores (Scaled by 100)',
                 data: tfidfData.map((term) => term.tfidf_score * 100), // Scaled TF-IDF scores
                 backgroundColor: 'rgba(34, 139, 34, 0.7)', // Dark Green
-                borderColor: 'rgba(34, 139, 34, 1)', // Solid Dark Green
+                borderColor: 'rgba(34, 139, 34, 1)',       // Solid Dark Green
                 borderWidth: 1,
             },
             {
                 label: 'TF Scores',
-                data: tfidfData.map((term) => term.tf_score), // Raw TF scores
+                data: tfidfData.map((term) => term.tf_score),
                 backgroundColor: 'rgba(255, 140, 0, 0.7)', // Dark Orange
-                borderColor: 'rgba(255, 140, 0, 1)', // Solid Orange
+                borderColor: 'rgba(255, 140, 0, 1)',       // Solid Orange
                 borderWidth: 1,
             },
         ],
@@ -81,7 +82,10 @@ const AnalysisResults = ({ results }) => {
                 <h2 className="text-3xl font-bold mb-6 text-primary">Top Search Results</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {results.titles.map((title, index) => (
-                        <div key={index} className="card bg-base-100 border border-gray-300 shadow-lg hover:border-primary">
+                        <div
+                            key={index}
+                            className="card bg-base-100 border border-gray-300 shadow-lg hover:border-primary"
+                        >
                             <div className="card-body flex items-center gap-2">
                                 <img
                                     src={results.favicons[index]}
@@ -109,7 +113,9 @@ const AnalysisResults = ({ results }) => {
             {tfidfData.length > 0 && (
                 <div className="card bg-base-100 shadow-xl">
                     <div className="card-body">
-                        <h2 className="text-3xl font-bold mb-6 text-primary">Top TF and TF-IDF Terms</h2>
+                        <h2 className="text-3xl font-bold mb-6 text-primary">
+                            Top TF and TF-IDF Terms
+                        </h2>
                         <div className="flex flex-col md:flex-row gap-4 h-[400px]">
                             {/* Bar Chart */}
                             <div className="w-full md:w-1/2 flex items-center">
@@ -183,6 +189,16 @@ const AnalysisResults = ({ results }) => {
                     </div>
                 </div>
             )}
+
+            {/* Button to go to Editor */}
+            <div className="text-right mt-4">
+                <button
+                    className="btn btn-primary"
+                    onClick={onGoToEditor}
+                >
+                    Go to Editor
+                </button>
+            </div>
         </div>
     );
 };

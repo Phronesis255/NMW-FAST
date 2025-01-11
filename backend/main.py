@@ -89,7 +89,7 @@ except Exception as e:
 # Load GloVe embeddings
 try:
     glove_embeddings_index = {}
-    file_path='glove.6B.100d.txt'
+    file_path='/Users/alirahebi/Code/glove.6B.100d.txt'
     with open(file_path, 'r', encoding='utf8') as f:
         for line in f:
             values = line.split()
@@ -395,6 +395,8 @@ class AnalysisResponse(BaseModel):
     headings_data: List[Dict]
     tfidf_terms: List[Dict]  # Include terms with their scores
     ideal_word_count: Optional[int] = 1000
+    top_terms: Optional[List[str]] = None  # add this
+
 
 class AnalysisInput(BaseModel):
     keyword: str
@@ -415,7 +417,7 @@ def analyze_keyword(input_data: AnalysisInput):
     retrieved_content = []
     successful_urls = []
     word_counts = []
-    max_contents = 3
+    max_contents = 15
     headings_data = []
     brand_names = set()  # To store unique brand names
 
@@ -518,13 +520,21 @@ def analyze_keyword(input_data: AnalysisInput):
     avg_tfidf_scores = np.mean(tfidf_matrix_filtered, axis=0)
     avg_tf_scores = np.mean(tf_matrix_filtered, axis=0)
     max_tf_scores = np.max(tf_matrix_filtered, axis=0)
+    word_counts_per_doc = [len(doc.split()) for doc in documents_lemmatized]
+    average_doc_length = float(sum(word_counts_per_doc)) / max(1, len(word_counts_per_doc))
+
+    # Normalize by average doc length
+    avg_tfidf_scores = avg_tfidf_scores.astype(float) / average_doc_length
+    avg_tf_scores = avg_tf_scores.astype(float) / average_doc_length
+    max_tf_scores = max_tf_scores.astype(float) / average_doc_length
+
     print(max_tf_scores)
     # Create a dictionary mapping terms to their scores
     term_scores = {
         term: {
             "tfidf": avg_tfidf_scores[i],
             "tf": avg_tf_scores[i],
-            "max_tf_score": max_tf_scores
+            "max_tf_score": float(max_tf_scores[i])
         }
         for i, term in enumerate(filtered_feature_names)
     }

@@ -79,4 +79,47 @@ def csv_to_sqlite(csv_file: str, db_file: str, table_name: str = "Pages"):
 # table_name = "Pages"  # Name of the table to create
 # csv_to_sqlite(csv_file_path, sqlite_db_path, table_name)
 
-create_database_and_table()
+# setup_db.py
+import sqlite3
+
+def create_database():
+    conn = sqlite3.connect("analysis_data.db")
+
+    # Table 1: Cache for full analysis JSON responses
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS analysis_cache (
+        keyword TEXT PRIMARY KEY,
+        response_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    # Table 2: TF-IDF Data (normalized per term)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS tfidf_data (
+        keyword TEXT,
+        term TEXT,
+        tfidf_score REAL,
+        tf_score REAL,
+        max_tf_score REAL,
+        PRIMARY KEY (keyword, term)
+    );
+    """)
+
+    # Table 3: Headings Data
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS headings_data (
+        keyword TEXT,
+        heading TEXT,
+        url TEXT,
+        title TEXT,
+        PRIMARY KEY (keyword, heading, url)
+    );
+    """)
+
+    conn.commit()
+    conn.close()
+    print("Database and tables created successfully.")
+
+create_database()
