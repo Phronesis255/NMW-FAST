@@ -32,6 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from generator import create_blog_post, llm
 import sqlite3
+import json  # [ADDED]
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -59,6 +60,7 @@ origins = [
     "http://localhost:8000",  # For testing directly with the backend server
     "http://127.0.0.1:5173", # Also allow localhost on port 5173
 ]
+DATABASE_PATH = "analysis_data.db"
 
 app = FastAPI()
 app.add_middleware(
@@ -103,6 +105,157 @@ except Exception as e:
 class GenerateArticleInput(BaseModel):
     keyword: str
     title: str
+
+class AnalysisResponse(BaseModel):
+    titles: List[str]
+    urls: List[str]
+    favicons: List[str]
+    word_counts: List[int]
+    headings_data: List[Dict]
+    tfidf_terms: List[Dict]  # Include terms with their scores
+    ideal_word_count: Optional[int] = 1000
+    top_terms: Optional[List[str]] = None  # add this
+
+
+class AnalysisInput(BaseModel):
+    keyword: str
+
+def get_db_connection():
+    return sqlite3.connect("analysis_data.db")
+
+def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
+    """
+    Returns an AnalysisResponse if found in analysis_cache table,
+    plus retrieves data from tfidf_data and headings_data.
+    Otherwise, returns None.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1) Check analysis_cache
+    cursor.execute("SELECT response_json FROM analysis_cache WHERE keyword = ?", (keyword,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return None  # Not cached
+
+    # 2) We have JSON in analysis_cache
+    cached_json_str = row[0]
+    cached_data = json.loads(cached_json_str)
+
+    # 3) Also retrieve TF-IDF from tfidf_data
+    cursor.execute("""
+        SELECT term, tf, tfidf, max_tf 
+        FROM tfidf_data
+        WHERE keyword = ?
+        ORDER BY tf DESC
+        LIMIT 50
+    """, (keyword,))
+    tfidf_rows = cursor.fetchall()
+
+    # Rebuild tfidf_terms from these rows
+    # Note: This might have a slightly different order than sorted by "tf" in your code,
+    # but we can keep it consistent if we match sorting logic.
+    tfidf_terms = []
+    top_terms = []
+    for (term, tf_val, tfidf_val, max_tf_val) in tfidf_rows:
+        tfidf_terms.append({
+            "word": term,
+            "tf_score": tf_val,
+            "tfidf_score": tfidf_val,
+            "max_tf": max_tf_val
+        })
+        top_terms.append(term)
+
+    # 4) Retrieve headings from headings_data
+    cursor.execute("""
+        SELECT heading_text, heading_url, heading_title
+        FROM headings_data
+        WHERE keyword = ?
+    """, (keyword,))
+    heading_rows = cursor.fetchall()
+    headings_data = []
+    for (h_text, h_url, h_title) in heading_rows:
+        headings_data.append({
+            "text": h_text,
+            "url": h_url,
+            "title": h_title
+        })
+
+    conn.close()
+
+    # 5) Rebuild final AnalysisResponse
+    # We override the "tfidf_terms" and "headings_data" with the DB’s data 
+    # instead of the JSON’s. Or we can keep JSON's data—your choice. 
+    # For demonstration, we’ll trust the DB’s separate tables as the source of truth.
+    # Everything else (titles, urls, etc.) come from the JSON.
+    cached_data["tfidf_terms"] = tfidf_terms
+    cached_data["headings_data"] = headings_data
+    cached_data["top_terms"] = top_terms
+
+    return AnalysisResponse(**cached_data)
+
+def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
+    """
+    1) Insert the analysis JSON into analysis_cache
+    2) Insert each TF-IDF item into tfidf_data
+    3) Insert each heading into headings_data
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1) Store JSON in analysis_cache
+    analysis_dict = analysis.dict()
+    # For caching, remove tfidf_terms & headings_data if you'd prefer to reconstruct from the separate tables.
+    # But let's store them so we have a "complete" JSON snapshot.
+    json_str = json.dumps(analysis_dict)
+
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO analysis_cache (keyword, response_json, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        """,
+        (keyword, json_str)
+    )
+
+    # 2) Insert tfidf_data for each term
+    # Clear existing entries for this keyword first
+    cursor.execute("DELETE FROM tfidf_data WHERE keyword = ?", (keyword,))
+    for item in analysis.tfidf_terms:
+        cursor.execute(
+            """
+            INSERT INTO tfidf_data (keyword, term, tf, tfidf, max_tf)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                keyword,
+                item["word"],
+                item["tf_score"],      # or item["tf_score"] depending on naming
+                item["tfidf_score"],
+                item["max_tf"]
+            )
+        )
+
+    # 3) Insert headings_data
+    # Clear existing headings for this keyword first
+    cursor.execute("DELETE FROM headings_data WHERE keyword = ?", (keyword,))
+    for heading in analysis.headings_data:
+        cursor.execute(
+            """
+            INSERT INTO headings_data (keyword, heading_text, heading_url, heading_title)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                keyword,
+                heading["text"],
+                heading["url"],
+                heading["title"]
+            )
+        )
+
+    conn.commit()
+    conn.close()
+
 
 @app.post("/api/generate-article")
 def generate_article(input_data: GenerateArticleInput):
@@ -387,23 +540,14 @@ def is_not_branded(question, brands):
     return True  # The question is not branded
 
 
-class AnalysisResponse(BaseModel):
-    titles: List[str]
-    urls: List[str]
-    favicons: List[str]
-    word_counts: List[int]
-    headings_data: List[Dict]
-    tfidf_terms: List[Dict]  # Include terms with their scores
-    ideal_word_count: Optional[int] = 1000
-    top_terms: Optional[List[str]] = None  # add this
-
-
-class AnalysisInput(BaseModel):
-    keyword: str
-
 @app.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_keyword(input_data: AnalysisInput):
     keyword = input_data.keyword
+    cached = fetch_cached_analysis(keyword)
+    if cached:
+        print(f"[DEBUG] Returning cached results for '{keyword}' from DB.")
+        return cached
+
     start_time = time.time()
     print(f'Starting Analysis of Keyword: {keyword} ...')
     top_urls = get_top_unique_domain_results(keyword, num_results=50, max_domains=50)
@@ -559,7 +703,8 @@ def analyze_keyword(input_data: AnalysisInput):
     elapsed_time = time.time() - start_time
     print(f"Time taken for Analysis Endpoint: {elapsed_time:.2f} seconds")
 
-    return AnalysisResponse(
+    # Build final AnalysisResponse
+    final_response = AnalysisResponse(
         titles=titles,
         urls=successful_urls,
         favicons=favicons,
@@ -569,6 +714,11 @@ def analyze_keyword(input_data: AnalysisInput):
         tfidf_terms=tfidf_terms,
         ideal_word_count=ideal_word_count
     )
+
+    # [ADDED] Save to DB: analysis_cache, tfidf_data, headings_data
+    store_analysis_in_db(keyword, final_response)
+
+    return final_response
 
 class EditorContent(BaseModel):
     content: str

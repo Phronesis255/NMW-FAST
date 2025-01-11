@@ -80,12 +80,11 @@ def csv_to_sqlite(csv_file: str, db_file: str, table_name: str = "Pages"):
 # csv_to_sqlite(csv_file_path, sqlite_db_path, table_name)
 
 # setup_db.py
-import sqlite3
 
 def create_database():
     conn = sqlite3.connect("analysis_data.db")
 
-    # Table 1: Cache for full analysis JSON responses
+    # 1) Table for cached JSON (like your current approach)
     conn.execute("""
     CREATE TABLE IF NOT EXISTS analysis_cache (
         keyword TEXT PRIMARY KEY,
@@ -95,26 +94,30 @@ def create_database():
     );
     """)
 
-    # Table 2: TF-IDF Data (normalized per term)
+    # 2) Table for individual TF-IDF data
+    #    Each row represents a single term’s scores for a given keyword.
     conn.execute("""
     CREATE TABLE IF NOT EXISTS tfidf_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         keyword TEXT,
         term TEXT,
-        tfidf_score REAL,
-        tf_score REAL,
-        max_tf_score REAL,
-        PRIMARY KEY (keyword, term)
+        tf REAL,
+        tfidf REAL,
+        max_tf REAL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
-    # Table 3: Headings Data
+    # 3) Table for headings data
+    #    Each row is one heading for that keyword: text, URL, and title
     conn.execute("""
     CREATE TABLE IF NOT EXISTS headings_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         keyword TEXT,
-        heading TEXT,
-        url TEXT,
-        title TEXT,
-        PRIMARY KEY (keyword, heading, url)
+        heading_text TEXT,
+        heading_url TEXT,
+        heading_title TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 

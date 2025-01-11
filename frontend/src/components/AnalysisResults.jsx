@@ -186,19 +186,17 @@ const AnalysisResults = ({ results, onGoToEditor }) => {
                                 </tbody>
                             </table>
                         </div>
+                        {/* NEW BUTTON to go to separate headings analysis screen */}
+                        <button
+                            className="btn btn-primary mt-4"
+                            onClick={() => onGoToHeadingsAnalysis(results.headings_data)}
+                        >
+                            Analyze These Headings
+                        </button>
+
                     </div>
                 </div>
             )}
-
-            {/* Button to go to Editor */}
-            <div className="text-right mt-4">
-                <button
-                    className="btn btn-primary"
-                    onClick={onGoToEditor}
-                >
-                    Go to Editor
-                </button>
-            </div>
         </div>
     );
 };

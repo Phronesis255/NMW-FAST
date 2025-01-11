@@ -13,10 +13,9 @@ import axios from 'axios';
 const calculateTermMetrics = (tfidfTerms, targetScores, wordCount) => {
     return tfidfTerms.map((term) => {
         const avgTfScore = targetScores[term] || 0;
-        // Directly use the tf_score as the "target"
-        const target = avgTfScore;
+        const rawTarget = avgTfScore * wordCount;
 
-        // +/-10% around the target
+        const target = Math.floor(rawTarget);
         const delta = Math.max(1, Math.floor(target * 0.1));
         const minOccurrences = Math.max(1, target - delta);
         const maxOccurrences = target + delta;
