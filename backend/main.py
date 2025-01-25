@@ -33,6 +33,8 @@ import logging
 from generator import create_blog_post, llm
 import sqlite3
 import json  # [ADDED]
+# main.py
+from hcuke import extract_keyphrases_from_texts
 
 try:
     _create_unverified_https_context = ssl._create_unverified_context
@@ -489,6 +491,100 @@ def is_not_branded(question, brands):
         if is_brand_mentioned(question, brand):
             return False
     return True
+
+@app.post("/api/keyphrases")
+def get_keyphrases(input_data: AnalysisInput):
+    """
+    Example endpoint that:
+    1) Retrieves (or reuses) the original user query / texts for `keyword`.
+    2) Passes texts to `extract_keyphrases_from_texts`.
+    3) Computes similarity to the original user query.
+    4) Sorts keyphrases by similarity and returns them with metadata.
+    """
+    keyword = input_data.keyword  # The user's search/analysis keyword
+
+    # (A) Load from your cached DB-based analysis if it exists
+    # This fetch_cached_analysis function is already in your code.
+    cached = fetch_cached_analysis(keyword)
+    if not cached or not cached.urls:
+        raise HTTPException(
+            status_code=404,
+            detail="No analysis data or URLs found for that keyword."
+        )
+
+    # For demonstration, let's assume "the original user query"
+    # is exactly the same as `keyword`. If you store a different
+    # raw user query in the DB, retrieve that string here instead.
+    user_query = keyword
+
+    # (B) Retrieve or reconstruct the texts from the same URLs
+    # If your DB doesn't store the raw texts, we'll just re-extract them:
+    raw_texts = []
+    for url in cached.urls:
+        _, content, _, _ = extract_content_from_url(url)
+        if content and content.strip():
+            raw_texts.append(content)
+
+    if not raw_texts:
+        raise HTTPException(
+            status_code=404,
+            detail="No valid text content found to extract keyphrases."
+        )
+
+    # (C) Call your function from hcuke.py to get keyphrases
+    # model_name and pooling might be your parameters
+    all_keyphrases = extract_keyphrases_from_texts(
+        raw_texts,
+        model_name="bert-base-uncased",
+        pooling="max"
+    )
+
+    # Flatten the list of lists
+    flattened_all_keyphrases = [kp for sublist in all_keyphrases for kp in sublist]
+
+    # (D) Calculate frequency of each keyphrase in the combined text (optional)
+    # Example: We combine all texts into one big string and do a naive count.
+    combined_text = " ".join(raw_texts).lower()
+
+    # Build a frequency dict: how many times each phrase occurs
+    frequency_dict = {}
+    for kp in flattened_all_keyphrases:
+        freq_count = combined_text.count(kp.lower())
+        frequency_dict[kp] = frequency_dict.get(kp, 0) + freq_count
+
+    # (E) Compute similarity of each keyphrase to the user query
+    # For efficiency, do it in a batch: encode all keyphrases at once.
+    # embedding_model is your global SentenceTransformer loaded earlier.
+    user_query_embedding = embedding_model.encode([user_query], convert_to_numpy=True)
+    keyphrase_embeddings = embedding_model.encode(
+        flattened_all_keyphrases, convert_to_numpy=True
+    )
+
+    # util.cos_sim returns a matrix, but here we have shape (1, n_phrases)
+    similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]
+
+    # (F) Build a structured list with all the data
+    keyphrase_objects = []
+    for i, kp in enumerate(flattened_all_keyphrases):
+        # e.g., length = count of words in the phrase
+        kp_length = len(kp.split())
+
+        obj = {
+            "keyword": kp,
+            # If you also want a "relevanceScore" you can reuse
+            # the "similarity" value or something else
+            "relevanceScore": round(float(similarity_scores[i]), 4),
+            "frequency": frequency_dict.get(kp, 0),
+            "kwLength": kp_length,
+            "similarity": round(float(similarity_scores[i]), 4),
+        }
+        keyphrase_objects.append(obj)
+
+    # (G) Sort them in descending order by similarity
+    keyphrase_objects.sort(key=lambda x: x["similarity"], reverse=True)
+
+    # (H) Return them. The frontend can parse and display in a table
+    return {"keyphrases": keyphrase_objects, "count": len(keyphrase_objects)}
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_keyword(input_data: AnalysisInput):
