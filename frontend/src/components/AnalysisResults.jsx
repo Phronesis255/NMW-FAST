@@ -20,7 +20,7 @@ ChartJS.register(
     Legend
 );
 
-const AnalysisResults = ({ results, onGoToEditor }) => {
+const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
     if (!results) {
         return <div className="alert alert-error shadow-lg">No results to display.</div>;
     }

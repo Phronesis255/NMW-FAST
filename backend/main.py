@@ -55,10 +55,12 @@ except OSError:
     from spacy.cli import download
     download('en_core_web_sm')
     nlp = spacy.load('en_core_web_sm')
+
 origins = [
     "http://localhost:5173",  # Our frontend app runs here
     "http://localhost:8000",  # For testing directly with the backend server
     "http://127.0.0.1:5173", # Also allow localhost on port 5173
+    "https://ominous-space-meme-9qvp7w6xwpw37r49-5173.app.github.dev"    
 ]
 DATABASE_PATH = "analysis_data.db"
 
@@ -66,6 +68,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # List of allowed origins
+    allow_origin_regex=r"https://.*\.app\.github\.dev$",    
     allow_credentials=True,  # Allow cookies and authentication headers
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers
@@ -81,26 +84,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load embedding model
+# Load embedding model (HuggingFace SentenceTransformer)
 try:
     embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
 except Exception as e:
     print(f"Error loading embedding model: {e}")
     embedding_model = None
-
-# Load GloVe embeddings
-try:
-    glove_embeddings_index = {}
-    file_path='/Users/alirahebi/Code/glove.6B.100d.txt'
-    with open(file_path, 'r', encoding='utf8') as f:
-        for line in f:
-            values = line.split()
-            word = values[0]
-            coefs = np.asarray(values[1:], dtype='float32')
-            glove_embeddings_index[word] = coefs
-except Exception as e:
-    print(f"Error loading Glove model: {e}")
-    glove_embeddings_index = {}
 
 class GenerateArticleInput(BaseModel):
     keyword: str
@@ -154,8 +143,6 @@ def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
     tfidf_rows = cursor.fetchall()
 
     # Rebuild tfidf_terms from these rows
-    # Note: This might have a slightly different order than sorted by "tf" in your code,
-    # but we can keep it consistent if we match sorting logic.
     tfidf_terms = []
     top_terms = []
     for (term, tf_val, tfidf_val, max_tf_val) in tfidf_rows:
@@ -185,10 +172,6 @@ def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
     conn.close()
 
     # 5) Rebuild final AnalysisResponse
-    # We override the "tfidf_terms" and "headings_data" with the DB’s data 
-    # instead of the JSON’s. Or we can keep JSON's data—your choice. 
-    # For demonstration, we’ll trust the DB’s separate tables as the source of truth.
-    # Everything else (titles, urls, etc.) come from the JSON.
     cached_data["tfidf_terms"] = tfidf_terms
     cached_data["headings_data"] = headings_data
     cached_data["top_terms"] = top_terms
@@ -206,8 +189,6 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
 
     # 1) Store JSON in analysis_cache
     analysis_dict = analysis.dict()
-    # For caching, remove tfidf_terms & headings_data if you'd prefer to reconstruct from the separate tables.
-    # But let's store them so we have a "complete" JSON snapshot.
     json_str = json.dumps(analysis_dict)
 
     cursor.execute(
@@ -219,7 +200,6 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     )
 
     # 2) Insert tfidf_data for each term
-    # Clear existing entries for this keyword first
     cursor.execute("DELETE FROM tfidf_data WHERE keyword = ?", (keyword,))
     for item in analysis.tfidf_terms:
         cursor.execute(
@@ -230,14 +210,13 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
             (
                 keyword,
                 item["word"],
-                item["tf_score"],      # or item["tf_score"] depending on naming
+                item["tf_score"],
                 item["tfidf_score"],
                 item["max_tf"]
             )
         )
 
     # 3) Insert headings_data
-    # Clear existing headings for this keyword first
     cursor.execute("DELETE FROM headings_data WHERE keyword = ?", (keyword,))
     for heading in analysis.headings_data:
         cursor.execute(
@@ -311,6 +290,7 @@ def generate_article(input_data: GenerateArticleInput):
 def remove_duplicate_questions(questions, similarity_threshold=0.75):
     if not embedding_model:
         return questions
+
     # Preprocess questions
     def preprocess(text):
         # Lowercase, remove punctuation
@@ -345,7 +325,6 @@ def remove_duplicate_questions(questions, similarity_threshold=0.75):
         else:
             cluster_to_questions[label].append(questions[idx])
 
-    # For each cluster, select the shortest question as representative
     representative_questions = []
     for cluster_questions in cluster_to_questions.values():
         representative = min(cluster_questions, key=len)
@@ -385,12 +364,10 @@ def extract_content_from_url(url, extract_headings=False, retries=2, timeout=5):
                 content = ' '.join([p.get_text() for p in paragraphs])
                 return title, content.strip(), favicon_url, headings
             else:
-                # Return None for content if status code is not 200
                 return None, "", "", None
         except requests.RequestException:
-            # Continue to next attempt
             pass
-        time.sleep(2)  # Wait before retrying
+        time.sleep(2)
     return None, "", "", None
 
 # Function to get top unique domain results for a keyword (more than 10 URLs)
@@ -412,7 +389,6 @@ def get_top_unique_domain_results(keyword, num_results=50, max_domains=50):
 
 # Function to lemmatize text
 def lemmatize_text(text):
-    # Your lemmatization code
     doc = nlp(text)
     lemmatized_tokens = []
     for token in doc:
@@ -427,8 +403,6 @@ def lemmatize_text(text):
             lemmatized_tokens.append(token.lemma_)
     return ' '.join(lemmatized_tokens)
 
-
-# Function to filter out value-less terms and custom stopwords
 def filter_terms(terms):
     custom_stopwords = set(["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "way", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now", "like", "need"])
 
@@ -441,82 +415,69 @@ def filter_terms(terms):
         # Exclude terms that have undesired POS tags
         if any(token.pos_ in ['AUX', 'PRON', 'DET', 'ADP', 'CCONJ', 'NUM', 'SYM', 'PUNCT'] for token in doc):
             continue
-        # Use lemmatization and check for stopwords and custom stopwords
+        # Use lemmatization and check for stopwords
         lemma_tokens = [token.lemma_.lower() for token in doc]
-        # Exclude terms if any token is a stopword or in custom stopwords
         if any(token in custom_stopwords or token in nlp.Defaults.stop_words for token in lemma_tokens):
             continue
         lemma = ' '.join(lemma_tokens)
         filtered_terms.append(lemma)
     return filtered_terms
 
-
+#
+# Replaced GloVe-based compute_embedding and get_sentence_embedding
+# with a HuggingFace SentenceTransformer approach:
+#
 def compute_embedding(text):
-    if not glove_embeddings_index:
-       return None
-
-    words = text.lower().split()
-    embeddings = []
-    for word in words:
-        if word in glove_embeddings_index:
-            embeddings.append(glove_embeddings_index[word])
-    if embeddings:
-        return np.mean(embeddings, axis=0)
-    else:
+    """
+    Returns an embedding vector from the HuggingFace SentenceTransformer model.
+    """
+    if not embedding_model:
         return None
+    # Encode the text as a single string, return first (and only) embedding
+    return embedding_model.encode([text], convert_to_numpy=True)[0]
 
 def get_sentence_embedding(sentence):
-    if not glove_embeddings_index:
-       return np.zeros(100) #Assuming 100 dimensional embeddings
+    """
+    Returns an embedding vector for a single sentence from the
+    HuggingFace SentenceTransformer model.
+    """
+    if not embedding_model:
+        # Fallback: return an all-zero vector of a typical dimension
+        # for 'all-MiniLM-L6-v2' (384 dims)
+        return np.zeros(384)
+    return embedding_model.encode([sentence], convert_to_numpy=True)[0]
 
-    words = sentence.lower().split()
-    embeddings = [glove_embeddings_index[word] for word in words if word in glove_embeddings_index]
-    if embeddings:
-        sentence_embedding = np.mean(embeddings, axis=0)
-    else:
-        sentence_embedding = np.zeros(100)  # Assuming 100-dimensional embeddings
-    return sentence_embedding
 
 def extract_brand_name(url, title):
     # Extract the domain name
     parsed_url = urlparse(url)
     domain_parts = parsed_url.netloc.split('.')
     
-    # Remove common prefixes (e.g., 'www')
-    if domain_parts[0] == 'www':
+    if domain_parts and domain_parts[0] == 'www':
         domain_parts.pop(0)
 
-    # Take the root domain (e.g., 'lawruler' from 'lawruler.com')
-    domain_root = domain_parts[0].capitalize()
+    domain_root = domain_parts[0].capitalize() if domain_parts else "Unknown"
 
-    # Attempt to extract the brand name from the title
     if title:
-        # Split title into parts (e.g., "Client Intake Software - Law Ruler")
         title_parts = title.split(' - ')
-        for part in reversed(title_parts):  # Start from the end
+        for part in reversed(title_parts):
             ratio = difflib.SequenceMatcher(None, domain_root.lower(), part.lower()).ratio()
-            if ratio > 0.8:  # Threshold for fuzzy matching
-                return part.strip()  # Return the part containing the domain root
+            if ratio > 0.8:
+                return part.strip()
 
-    # Fallback to the root domain as the brand name
     return domain_root
 
 def is_brand_mentioned(term, brand_name):
-    # Case-insensitive check
     if brand_name.lower() in term.lower():
         return True
 
-    # Optionally use difflib for partial matches
     ratio = difflib.SequenceMatcher(None, term.lower().replace(' ', ''), brand_name.lower().replace(' ', '')).ratio()
-    # Consider it a match if similarity is high enough (adjust threshold as needed)
     if ratio > 0.8:
         return True
 
-    # Check NER: if a named entity matches or closely resembles the brand
     doc = nlp(term)
     for ent in doc.ents:
         if ent.label_ in ['ORG', 'PRODUCT', 'PERSON', 'GPE']:
-            # Compare entity text with brand_name using a ratio
             ratio_ent = difflib.SequenceMatcher(None, ent.text.lower().replace(' ', ''), brand_name.lower().replace(' ', '')).ratio()
             if ratio_ent > 0.8:
                 return True
@@ -524,21 +485,10 @@ def is_brand_mentioned(term, brand_name):
     return False
 
 def is_not_branded(question, brands):
-    """
-    Checks if a given question string is branded.
-
-    Args:
-        question (str): The question string to check.
-
-    Returns:
-        bool: True if the question is not branded, False otherwise.
-    """
-    # Check if the question mentions any brand name
     for brand in brands:
         if is_brand_mentioned(question, brand):
-            return False  # The question is branded
-    return True  # The question is not branded
-
+            return False
+    return True
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_keyword(input_data: AnalysisInput):
@@ -575,10 +525,9 @@ def analyze_keyword(input_data: AnalysisInput):
         brand_name = extract_brand_name(url, title)
         brand_names.add(brand_name)
 
-        if headings and isinstance(headings, list):  # Ensure headings is a list
+        if headings and isinstance(headings, list):
             for heading in headings:
-                if isinstance(heading, dict) and 'text' in heading:  # Ensure heading is a dictionary with 'text'
-                    # Append title along with heading text and URL
+                if isinstance(heading, dict) and 'text' in heading:
                     headings_data.append({
                         'text': heading['text'].strip(),
                         'url': url,
@@ -597,7 +546,6 @@ def analyze_keyword(input_data: AnalysisInput):
                 else:
                     word_counts.append(1000)
             else:
-                # Already have enough content, break the loop
                 break
         time.sleep(0.5)
         if len(retrieved_content) >= max_contents:
@@ -611,7 +559,6 @@ def analyze_keyword(input_data: AnalysisInput):
 
     print(f"Completed content retrieval. {len(retrieved_content)} contents retrieved.")
 
-    # Calculating ideal word count
     documents = retrieved_content
 
     # Lemmatize the documents
@@ -638,42 +585,34 @@ def analyze_keyword(input_data: AnalysisInput):
         filtered_headings_data = []
         print('No headings were extracted')
 
-    # Initialize TF and TF-IDF Vectorizers with n-grams (uni-, bi-, tri-grams)
     tfidf_vectorizer = TfidfVectorizer(ngram_range=(1, 3))
     tf_vectorizer = CountVectorizer(ngram_range=(1, 3))
 
-    # Fit the model and transform the documents into TF and TF-IDF matrices
     tfidf_matrix = tfidf_vectorizer.fit_transform(documents_lemmatized).toarray()
     tf_matrix = tf_vectorizer.fit_transform(documents_lemmatized).toarray()
 
-    # Extract feature names (terms)
     feature_names = tfidf_vectorizer.get_feature_names_out()
 
-    # Filter feature names to exclude less informative words
+    # Filter feature names
     filtered_feature_names = filter_terms(feature_names)
-
-    # Filter TF-IDF and TF matrices to only include filtered terms
     filtered_indices = [i for i, term in enumerate(feature_names) if term in filtered_feature_names]
     tfidf_matrix_filtered = tfidf_matrix[:, filtered_indices]
     tf_matrix_filtered = tf_matrix[:, filtered_indices]
 
-    # Update feature names after filtering
     filtered_feature_names = [feature_names[i] for i in filtered_indices]
 
-    # Calculate average TF-IDF and TF scores
     avg_tfidf_scores = np.mean(tfidf_matrix_filtered, axis=0)
     avg_tf_scores = np.mean(tf_matrix_filtered, axis=0)
     max_tf_scores = np.max(tf_matrix_filtered, axis=0)
+
     word_counts_per_doc = [len(doc.split()) for doc in documents_lemmatized]
     average_doc_length = float(sum(word_counts_per_doc)) / max(1, len(word_counts_per_doc))
 
-    # Normalize by average doc length
+    # Normalize
     avg_tfidf_scores = avg_tfidf_scores.astype(float) / average_doc_length
     avg_tf_scores = avg_tf_scores.astype(float) / average_doc_length
     max_tf_scores = max_tf_scores.astype(float) / average_doc_length
 
-    print(max_tf_scores)
-    # Create a dictionary mapping terms to their scores
     term_scores = {
         term: {
             "tfidf": avg_tfidf_scores[i],
@@ -682,12 +621,8 @@ def analyze_keyword(input_data: AnalysisInput):
         }
         for i, term in enumerate(filtered_feature_names)
     }
-    # Get the top 50 terms based on TF-IDF scores
     top_terms = sorted(term_scores, key=lambda t: term_scores[t]["tf"], reverse=True)[:50]
-    for i, term in enumerate(top_terms):
-        print(f"Word: {term}, {max_tf_scores[i]}")
 
-    # Create a list of dictionaries for terms with both TF and TF-IDF scores
     tfidf_terms = [
         {
             "word": term,
@@ -703,7 +638,6 @@ def analyze_keyword(input_data: AnalysisInput):
     elapsed_time = time.time() - start_time
     print(f"Time taken for Analysis Endpoint: {elapsed_time:.2f} seconds")
 
-    # Build final AnalysisResponse
     final_response = AnalysisResponse(
         titles=titles,
         urls=successful_urls,
@@ -715,7 +649,7 @@ def analyze_keyword(input_data: AnalysisInput):
         ideal_word_count=ideal_word_count
     )
 
-    # [ADDED] Save to DB: analysis_cache, tfidf_data, headings_data
+    # [ADDED] Save to DB
     store_analysis_in_db(keyword, final_response)
 
     return final_response
@@ -727,12 +661,9 @@ class EditorContent(BaseModel):
 async def save_content(content: EditorContent):
     try:
         # Here you would typically save the content to a database
-        # For now, we'll just return a success message
         return {"message": "Content saved successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 if __name__ == "__main__":
     import uvicorn

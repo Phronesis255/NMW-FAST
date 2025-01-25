@@ -57,7 +57,7 @@ const App = () => {
 
         try {
             console.log("[DEBUG] Fetching analysis results...");
-            const response = await axios.post('http://localhost:8000/api/analyze', { keyword });
+            const response = await axios.post('https://ominous-space-meme-9qvp7w6xwpw37r49-8000.app.github.dev/api/analyze', { keyword });
             setResults(response.data);
             console.log("[DEBUG] Results fetched successfully:", response.data);
         } catch (err) {

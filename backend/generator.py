@@ -28,7 +28,7 @@ llm_model = "gpt-4o-mini"
 load_dotenv()
 OPENAI = os.getenv("OPENAI_API_KEY")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
-
+print(OPENAI)
 # Initialize LLM and embedding model
 llm = ChatOpenAI(model=llm_model, temperature=1, api_key=OPENAI)
 
