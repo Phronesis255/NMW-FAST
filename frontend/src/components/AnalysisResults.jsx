@@ -75,37 +75,102 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
         },
     };
 
+    const titles = results.titles || [];
+    const urls = results.urls || [];
+    const favicons = results.favicons || [];
+
     return (
         <div className="mt-4 space-y-8">
-            {/* Top Search Results */}
-            <div>
-                <h2 className="text-3xl font-bold mb-6 text-primary">Top Search Results</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {results.titles.map((title, index) => (
-                        <div
-                            key={index}
-                            className="card bg-base-100 border border-gray-300 shadow-lg hover:border-primary"
-                        >
-                            <div className="card-body flex items-center gap-2">
-                                <img
-                                    src={results.favicons[index]}
-                                    alt="favicon"
-                                    className="w-6 h-6 rounded"
-                                />
-                                <div>
-                                    <h3 className="card-title text-lg font-bold">{title}</h3>
-                                    <a
-                                        href={results.urls[index]}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-500 underline text-sm"
-                                    >
-                                        {results.urls[index]}
-                                    </a>
+
+            {/* 
+              Wrap the entire "Top Search Results" section in a DaisyUI drawer
+              so that extra cards beyond the top 3 appear in the drawer-side. 
+            */}
+            <div className="drawer drawer-end">
+                <input id="results-drawer" type="checkbox" className="drawer-toggle" />
+                
+                {/* Drawer content: This is the main page content */}
+                <div className="drawer-content">
+                    {/* Top Search Results (show only top 3) */}
+                    <h2 className="text-3xl font-bold mb-6 text-primary">Top Search Results</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {titles.slice(0, 3).map((title, index) => (
+                            <div
+                                key={index}
+                                className="card bg-base-100 border border-gray-300 shadow-lg hover:border-primary"
+                            >
+                                <div className="card-body flex items-center gap-2">
+                                    <img
+                                        src={favicons[index]}
+                                        alt="favicon"
+                                        className="w-6 h-6 rounded"
+                                    />
+                                    <div>
+                                        <h3 className="card-title text-lg font-bold">{title}</h3>
+                                        <a
+                                            href={urls[index]}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-500 underline text-sm"
+                                        >
+                                            {urls[index]}
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
+                        ))}
+                    </div>
+
+                    {/* Button to open the drawer if there are more than 3 results */}
+                    {titles.length > 3 && (
+                        <div className="mt-4">
+                            <label htmlFor="results-drawer" className="btn btn-primary">
+                                View More
+                            </label>
                         </div>
-                    ))}
+                    )}
+                </div>
+
+                {/* Drawer side: hidden by default, shown when checkbox is checked */}
+                <div className="drawer-side">
+                    {/* Close the drawer by clicking on the overlay */}
+                    <label htmlFor="results-drawer" className="drawer-overlay"></label>
+                    <div className="p-4 w-80 bg-base-100 text-base-content overflow-y-auto">
+                        <h3 className="font-bold text-lg">More Search Results</h3>
+                        <div className="mt-4 space-y-4">
+                            {titles.slice(3).map((title, index) => (
+                                <div
+                                    key={index + 3}
+                                    className="card bg-base-100 border border-gray-300 shadow-lg hover:border-primary"
+                                >
+                                    <div className="card-body flex items-center gap-2">
+                                        <img
+                                            src={favicons[index + 3]}
+                                            alt="favicon"
+                                            className="w-6 h-6 rounded"
+                                        />
+                                        <div>
+                                            <h3 className="card-title text-lg font-bold">{title}</h3>
+                                            <a
+                                                href={urls[index + 3]}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-500 underline text-sm"
+                                            >
+                                                {urls[index + 3]}
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        {/* Optional: A close button at the bottom */}
+                        <div className="mt-4">
+                            <label htmlFor="results-drawer" className="btn btn-secondary">
+                                Close
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -193,7 +258,6 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
                         >
                             Analyze These Headings
                         </button>
-
                     </div>
                 </div>
             )}
