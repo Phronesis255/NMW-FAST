@@ -43,6 +43,7 @@ except AttributeError:
 else:
     ssl._create_default_https_context = _create_unverified_https_context
 
+CURRENT_USER_KEYWORD: str = ""
 
 import nltk
 nltk.download('punkt')
@@ -237,6 +238,47 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     conn.commit()
     conn.close()
 
+def google_custom_search(query, api_key, cse_id, num_results=10, delay=1): # Added delay parameter
+    """Performs Google Custom Search with rate limiting."""
+    if not api_key:
+        api_key = os.getenv("CSE_API")
+    if not cse_id:
+        cse_id = os.getenv("CSE_ID")
+
+    all_results = []
+    start_index = 1
+    while len(all_results) < num_results:
+      remaining_results = num_results - len(all_results)
+      current_num = min(10, remaining_results)
+      url = "https://customsearch.googleapis.com/customsearch/v1"
+      params = {
+          'q': query,
+          'key': api_key,
+          'cx': cse_id,
+          'num': current_num,
+          'start': start_index
+      }
+      try:
+          response = requests.get(url, params=params)
+          response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+          data = response.json()
+          items = data.get('items', [])
+          if not items:
+            break
+          all_results.extend(items)
+          start_index += current_num
+          time.sleep(delay)  # Introduce a delay between requests
+      except requests.exceptions.RequestException as e:
+          if response.status_code == 429: # Check if it's a rate limit error
+              print("Rate limit exceeded. Retrying in 60 seconds...")
+              time.sleep(120) # Wait 60 seconds before retrying
+              continue # Retry the current request
+          else:
+              print(f"Error: {e}")
+              if response.text:
+                print(response.text)
+              return []
+    return all_results
 
 @app.post("/api/generate-article")
 def generate_article(input_data: GenerateArticleInput):
@@ -501,7 +543,10 @@ def get_keyphrases(input_data: AnalysisInput):
     3) Computes similarity to the original user query.
     4) Sorts keyphrases by similarity and returns them with metadata.
     """
-    keyword = input_data.keyword  # The user's search/analysis keyword
+    global CURRENT_USER_KEYWORD
+
+    # user_query might simply be the last user keyword from /api/analyze
+    CURRENT_USER_KEYWORD  # The user's search/analysis keyword
 
     # (A) Load from your cached DB-based analysis if it exists
     # This fetch_cached_analysis function is already in your code.
@@ -588,7 +633,11 @@ def get_keyphrases(input_data: AnalysisInput):
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_keyword(input_data: AnalysisInput):
+    global CURRENT_USER_KEYWORD
+
     keyword = input_data.keyword
+    CURRENT_USER_KEYWORD = keyword  # <-- store in global variable
+
     cached = fetch_cached_analysis(keyword)
     if cached:
         print(f"[DEBUG] Returning cached results for '{keyword}' from DB.")
@@ -596,9 +645,13 @@ def analyze_keyword(input_data: AnalysisInput):
 
     start_time = time.time()
     print(f'Starting Analysis of Keyword: {keyword} ...')
-    top_urls = get_top_unique_domain_results(keyword, num_results=50, max_domains=50)
+    search_items = google_custom_search(query=keyword, num_results=15, delay=0.5)
+    if not search_items:
+        raise HTTPException(status_code=404, detail='No results found from custom search.')
+
+    top_urls = [item['link'] for item in search_items if 'link' in item]
     if not top_urls:
-        raise HTTPException(status_code=404, detail='No results found.')
+        raise HTTPException(status_code=404, detail='No URLs found in the custom search results.')
 
     # Initialize lists to store data
     titles = []
