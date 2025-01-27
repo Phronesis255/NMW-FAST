@@ -45,6 +45,9 @@ else:
 
 CURRENT_USER_KEYWORD: str = ""
 
+from dotenv import load_dotenv
+load_dotenv()  # This will read .env file in the current directory
+
 import nltk
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -107,6 +110,7 @@ class AnalysisResponse(BaseModel):
     tfidf_terms: List[Dict]  # Include terms with their scores
     ideal_word_count: Optional[int] = 1000
     top_terms: Optional[List[str]] = None  # add this
+    long_tail_keywords: List[Dict] = []
 
 
 class AnalysisInput(BaseModel):
@@ -183,14 +187,15 @@ def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
 
 def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     """
-    1) Insert the analysis JSON into analysis_cache
+    1) Insert the entire analysis JSON into analysis_cache
     2) Insert each TF-IDF item into tfidf_data
     3) Insert each heading into headings_data
+    4) Insert each long-tail keyword into long_tail_keywords
     """
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1) Store JSON in analysis_cache
+    # 1) Store JSON in analysis_cache (analysis_cache has columns: keyword, response_json, updated_at)
     analysis_dict = analysis.dict()
     json_str = json.dumps(analysis_dict)
 
@@ -202,7 +207,7 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
         (keyword, json_str)
     )
 
-    # 2) Insert tfidf_data for each term
+    # 2) Insert tfidf_data (tfidf_data has columns: keyword, term, tf, tfidf, max_tf)
     cursor.execute("DELETE FROM tfidf_data WHERE keyword = ?", (keyword,))
     for item in analysis.tfidf_terms:
         cursor.execute(
@@ -219,7 +224,7 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
             )
         )
 
-    # 3) Insert headings_data
+    # 3) Insert headings_data (headings_data has columns: keyword, heading_text, heading_url, heading_title)
     cursor.execute("DELETE FROM headings_data WHERE keyword = ?", (keyword,))
     for heading in analysis.headings_data:
         cursor.execute(
@@ -234,6 +239,33 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
                 heading["title"]
             )
         )
+
+    # 4) Insert long_tail_keywords (you'll need a matching table schema, e.g.):
+    #    CREATE TABLE IF NOT EXISTS long_tail_keywords (
+    #        id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #        keyword TEXT,
+    #        keyphrase TEXT,
+    #        relevance_score REAL,
+    #        frequency INTEGER,
+    #        kw_length INTEGER,
+    #        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    #    );
+    cursor.execute("DELETE FROM long_tail_keywords WHERE keyword = ?", (keyword,))
+    if hasattr(analysis, "long_tail_keywords") and analysis.long_tail_keywords:
+        for lt in analysis.long_tail_keywords:
+            cursor.execute(
+                """
+                INSERT INTO long_tail_keywords (keyword, keyphrase, relevance_score, frequency, kw_length)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    keyword,
+                    lt["keyword"],         # e.g. "best running shoes for men"
+                    lt["relevanceScore"],  # e.g. 0.8732
+                    lt["frequency"],       # e.g. 3
+                    lt["kwLength"]         # e.g. 5
+                )
+            )
 
     conn.commit()
     conn.close()
@@ -534,102 +566,59 @@ def is_not_branded(question, brands):
             return False
     return True
 
-@app.post("/api/keyphrases")
-def get_keyphrases(input_data: AnalysisInput):
+# @app.post("/api/keyphrases")
+def get_keyphrases(user_query: str, raw_texts: List[str]) -> Dict[str, Any]:
     """
-    Example endpoint that:
-    1) Retrieves (or reuses) the original user query / texts for `keyword`.
-    2) Passes texts to `extract_keyphrases_from_texts`.
-    3) Computes similarity to the original user query.
-    4) Sorts keyphrases by similarity and returns them with metadata.
+    Extract keyphrases from the given raw_texts, then compute:
+      1) Frequency of each keyphrase across all texts
+      2) Similarity of each keyphrase to the given user_query
+    Sort by similarity descending, and return the list.
     """
-    global CURRENT_USER_KEYWORD
-
-    # user_query might simply be the last user keyword from /api/analyze
-    CURRENT_USER_KEYWORD  # The user's search/analysis keyword
-
-    # (A) Load from your cached DB-based analysis if it exists
-    # This fetch_cached_analysis function is already in your code.
-    cached = fetch_cached_analysis(keyword)
-    if not cached or not cached.urls:
-        raise HTTPException(
-            status_code=404,
-            detail="No analysis data or URLs found for that keyword."
-        )
-
-    # For demonstration, let's assume "the original user query"
-    # is exactly the same as `keyword`. If you store a different
-    # raw user query in the DB, retrieve that string here instead.
-    user_query = keyword
-
-    # (B) Retrieve or reconstruct the texts from the same URLs
-    # If your DB doesn't store the raw texts, we'll just re-extract them:
-    raw_texts = []
-    for url in cached.urls:
-        _, content, _, _ = extract_content_from_url(url)
-        if content and content.strip():
-            raw_texts.append(content)
-
-    if not raw_texts:
-        raise HTTPException(
-            status_code=404,
-            detail="No valid text content found to extract keyphrases."
-        )
-
-    # (C) Call your function from hcuke.py to get keyphrases
-    # model_name and pooling might be your parameters
+    # 1) Extract keyphrases from each text
     all_keyphrases = extract_keyphrases_from_texts(
         raw_texts,
-        model_name="bert-base-uncased",
+        model_name="bert-base-uncased",  # Adjust as needed
         pooling="max"
     )
 
-    # Flatten the list of lists
+    # 2) Flatten the list of lists
     flattened_all_keyphrases = [kp for sublist in all_keyphrases for kp in sublist]
 
-    # (D) Calculate frequency of each keyphrase in the combined text (optional)
-    # Example: We combine all texts into one big string and do a naive count.
+    # 3) Build a frequency dict by combining all texts into one string
     combined_text = " ".join(raw_texts).lower()
-
-    # Build a frequency dict: how many times each phrase occurs
     frequency_dict = {}
     for kp in flattened_all_keyphrases:
         freq_count = combined_text.count(kp.lower())
         frequency_dict[kp] = frequency_dict.get(kp, 0) + freq_count
 
-    # (E) Compute similarity of each keyphrase to the user query
-    # For efficiency, do it in a batch: encode all keyphrases at once.
-    # embedding_model is your global SentenceTransformer loaded earlier.
+    # 4) Compute similarity of each keyphrase to the user query
     user_query_embedding = embedding_model.encode([user_query], convert_to_numpy=True)
-    keyphrase_embeddings = embedding_model.encode(
-        flattened_all_keyphrases, convert_to_numpy=True
-    )
+    keyphrase_embeddings = embedding_model.encode(flattened_all_keyphrases, convert_to_numpy=True)
+    similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]  # shape (n_phrases,)
 
-    # util.cos_sim returns a matrix, but here we have shape (1, n_phrases)
-    similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]
-
-    # (F) Build a structured list with all the data
+    # 5) Build a structured list with all the data
     keyphrase_objects = []
     for i, kp in enumerate(flattened_all_keyphrases):
-        # e.g., length = count of words in the phrase
         kp_length = len(kp.split())
+        sim = float(similarity_scores[i])
 
         obj = {
             "keyword": kp,
-            # If you also want a "relevanceScore" you can reuse
-            # the "similarity" value or something else
-            "relevanceScore": round(float(similarity_scores[i]), 4),
+            "relevanceScore": round(sim, 4),
             "frequency": frequency_dict.get(kp, 0),
             "kwLength": kp_length,
-            "similarity": round(float(similarity_scores[i]), 4),
+            "similarity": round(sim, 4),
         }
         keyphrase_objects.append(obj)
 
-    # (G) Sort them in descending order by similarity
+    # 6) Sort by similarity descending
     keyphrase_objects.sort(key=lambda x: x["similarity"], reverse=True)
 
-    # (H) Return them. The frontend can parse and display in a table
-    return {"keyphrases": keyphrase_objects, "count": len(keyphrase_objects)}
+    # 7) Return them to the caller
+    return {
+        "keyphrases": keyphrase_objects,
+        "count": len(keyphrase_objects)
+    }
 
 @app.post("/api/analyze", response_model=AnalysisResponse)
 def analyze_keyword(input_data: AnalysisInput):
@@ -781,7 +770,7 @@ def analyze_keyword(input_data: AnalysisInput):
         }
         for term in top_terms
     ]
-
+    long_tail_data = get_keyphrases(keyword, retrieved_content)
     ideal_word_count = int(np.median(word_counts)) + 500 if word_counts else 1000
 
     elapsed_time = time.time() - start_time
@@ -795,7 +784,9 @@ def analyze_keyword(input_data: AnalysisInput):
         headings_data=filtered_headings_data,
         top_terms=top_terms,
         tfidf_terms=tfidf_terms,
-        ideal_word_count=ideal_word_count
+        ideal_word_count=ideal_word_count,
+        long_tail_keywords = long_tail_data["keyphrases"]
+
     )
 
     # [ADDED] Save to DB

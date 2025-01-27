@@ -36,16 +36,16 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
     datasets: [
       {
         label: 'TF-IDF Scores (Scaled by 100)',
-        data: tfidfData.map((term) => term.tfidf_score * 100), // Scaled TF-IDF
-        backgroundColor: 'rgba(34, 139, 34, 0.7)', // Dark Green
-        borderColor: 'rgba(34, 139, 34, 1)',       // Solid Dark Green
+        data: tfidfData.map((term) => term.tfidf_score * 100),
+        backgroundColor: 'rgba(34, 139, 34, 0.7)',
+        borderColor: 'rgba(34, 139, 34, 1)',
         borderWidth: 1,
       },
       {
         label: 'TF Scores',
         data: tfidfData.map((term) => term.tf_score),
-        backgroundColor: 'rgba(255, 140, 0, 0.7)', // Dark Orange
-        borderColor: 'rgba(255, 140, 0, 1)',       // Solid Orange
+        backgroundColor: 'rgba(255, 140, 0, 0.7)',
+        borderColor: 'rgba(255, 140, 0, 1)',
         borderWidth: 1,
       },
     ],
@@ -67,14 +67,14 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
     scales: {
       y: {
         beginAtZero: true,
-        stacked: true, // Enable stacking
+        stacked: true,
         title: {
           display: true,
           text: 'Scores (TF + Scaled TF-IDF)',
         },
       },
       x: {
-        stacked: true, // Enable stacking
+        stacked: true,
       },
     },
   };
@@ -83,8 +83,12 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
   const urls = results.urls || [];
   const favicons = results.favicons || [];
 
-  // State to control whether the "extra" cards (beyond top 3) are expanded or collapsed
+  // Manage expand/collapse for additional cards
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Pull the new long-tail keywords data from the backend response
+  // This is populated by the code in main.py => final_response.long_tail_keywords
+  const longTailKeywords = results.long_tail_keywords || [];
 
   return (
     <div className="mt-4 space-y-8">
@@ -93,7 +97,6 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
         <h2 className="text-3xl font-bold mb-6 text-primary">
           Top Search Results
         </h2>
-
         {/* Always show the top 3 cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {titles.slice(0, 3).map((title, index) => (
@@ -108,8 +111,6 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
                   className="w-6 h-6 rounded"
                 />
                 <div>
-                  {/* Truncate long titles to prevent overflow;
-                      add title={title} so hovering shows full text. */}
                   <h3
                     className="card-title text-lg font-bold truncate max-w-[250px]"
                     title={title}
@@ -130,10 +131,9 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
           ))}
         </div>
 
-        {/* Collapsible area for remaining cards (only if more than 3) */}
+        {/* Collapsible area for remaining cards */}
         {titles.length > 3 && (
           <div className="collapse collapse-arrow border border-base-300 bg-base-100 rounded-box mt-4">
-            {/* The checkbox that DaisyUI uses to toggle open/close */}
             <input
               type="checkbox"
               className="peer"
@@ -264,6 +264,39 @@ const AnalysisResults = ({ results, onGoToEditor, onGoToHeadingsAnalysis }) => {
             >
               Analyze These Headings
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* NEW Long-Tail Keywords Section */}
+      {longTailKeywords.length > 0 && (
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body">
+            <h2 className="text-3xl font-bold mb-6 text-primary">
+              Long-Tail Keywords
+            </h2>
+            <div className="overflow-x-auto">
+              <table className="table table-compact table-zebra w-full">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th>Keyword</th>
+                    <th>Relevance Score</th>
+                    <th>Frequency</th>
+                    <th>KW Length</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {longTailKeywords.map((item, index) => (
+                    <tr key={index} className="hover">
+                      <td>{item.keyword}</td>
+                      <td>{item.relevanceScore}</td>
+                      <td>{item.frequency}</td>
+                      <td>{item.kwLength}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
