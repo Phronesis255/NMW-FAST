@@ -1,5 +1,5 @@
 # backend/main.py
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import time
 import re
 import math
@@ -597,19 +597,21 @@ def get_keyphrases(user_query: str, raw_texts: List[str]) -> Dict[str, Any]:
     similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]  # shape (n_phrases,)
 
     # 5) Build a structured list with all the data
+    seen_keyphrases = set()  # Track already-added keyphrases
     keyphrase_objects = []
     for i, kp in enumerate(flattened_all_keyphrases):
         kp_length = len(kp.split())
         sim = float(similarity_scores[i])
-
-        obj = {
-            "keyword": kp,
-            "relevanceScore": round(sim, 4),
-            "frequency": frequency_dict.get(kp, 0),
-            "kwLength": kp_length,
-            "similarity": round(sim, 4),
-        }
-        keyphrase_objects.append(obj)
+        if sim >= 0.72 and kp not in seen_keyphrases:
+            obj = {
+                "keyword": kp,
+                "relevanceScore": round(sim, 4),
+                "frequency": frequency_dict.get(kp, 0),
+                "kwLength": kp_length,
+                "similarity": round(sim, 4),
+            }
+            keyphrase_objects.append(obj)
+            seen_keyphrases.add(kp)  # Mark this keyphrase as added
 
     # 6) Sort by similarity descending
     keyphrase_objects.sort(key=lambda x: x["similarity"], reverse=True)
@@ -634,7 +636,9 @@ def analyze_keyword(input_data: AnalysisInput):
 
     start_time = time.time()
     print(f'Starting Analysis of Keyword: {keyword} ...')
-    search_items = google_custom_search(query=keyword, num_results=15, delay=0.5)
+    api_key = os.getenv("CSE_API")
+    cse_id = os.getenv("CSE_ID")
+    search_items = google_custom_search(query=keyword, num_results=15, api_key=api_key, cse_id=cse_id,delay=0.5)
     if not search_items:
         raise HTTPException(status_code=404, detail='No results found from custom search.')
 

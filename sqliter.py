@@ -84,7 +84,7 @@ def csv_to_sqlite(csv_file: str, db_file: str, table_name: str = "Pages"):
 def create_database():
     conn = sqlite3.connect("analysis_data.db")
 
-    # 1) Table for cached JSON (like your current approach)
+    # 1) Create analysis_cache table
     conn.execute("""
     CREATE TABLE IF NOT EXISTS analysis_cache (
         keyword TEXT PRIMARY KEY,
@@ -94,8 +94,7 @@ def create_database():
     );
     """)
 
-    # 2) Table for individual TF-IDF data
-    #    Each row represents a single term’s scores for a given keyword.
+    # 2) Create tfidf_data table
     conn.execute("""
     CREATE TABLE IF NOT EXISTS tfidf_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,8 +107,7 @@ def create_database():
     );
     """)
 
-    # 3) Table for headings data
-    #    Each row is one heading for that keyword: text, URL, and title
+    # 3) Create headings_data table
     conn.execute("""
     CREATE TABLE IF NOT EXISTS headings_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,8 +119,50 @@ def create_database():
     );
     """)
 
+    # 4) Create long_tail_keywords table (new table for long-tail keywords)
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS long_tail_keywords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword TEXT,
+        keyphrase TEXT,
+        relevance_score REAL,
+        frequency INTEGER,
+        kw_length INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     conn.commit()
     conn.close()
     print("Database and tables created successfully.")
 
-create_database()
+def create_longtail():
+    conn = sqlite3.connect("analysis_data.db")
+
+    # Create the long_tail_keywords table
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS long_tail_keywords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        keyword TEXT,
+        keyphrase TEXT,
+        relevance_score REAL,
+        frequency INTEGER,
+        kw_length INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    conn.commit()
+    conn.close()
+
+create_longtail()
+conn = sqlite3.connect("analysis_data.db")
+cursor = conn.cursor()
+
+# List all tables in the database
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = cursor.fetchall()
+print("Tables in database:", tables)
+
+conn.close()
+
