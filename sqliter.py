@@ -155,7 +155,7 @@ def create_longtail():
     conn.commit()
     conn.close()
 
-create_longtail()
+# create_longtail()
 conn = sqlite3.connect("analysis_data.db")
 cursor = conn.cursor()
 

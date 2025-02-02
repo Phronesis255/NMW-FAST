@@ -24,6 +24,7 @@ from transformers.pipelines import QuestionAnsweringPipeline
 from sentence_transformers import SentenceTransformer, util
 from sklearn.cluster import AgglomerativeClustering
 import os
+import operator
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
@@ -69,6 +70,10 @@ origins = [
     "https://ominous-space-meme-9qvp7w6xwpw37r49-5173.app.github.dev"    
 ]
 DATABASE_PATH = "analysis_data.db"
+CHUNK_GRAMMAR = r"""
+  NP: {<JJ.*>*<NN.*>+}
+"""
+chunk_parser = nltk.RegexpParser(CHUNK_GRAMMAR)
 
 app = FastAPI()
 app.add_middleware(
@@ -184,6 +189,28 @@ def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
     cached_data["top_terms"] = top_terms
 
     return AnalysisResponse(**cached_data)
+def check_table_exists(db_path: str, table_name: str) -> bool:
+    """
+    Check if a table exists in the SQLite database.
+    
+    :param db_path: Path to the SQLite database file.
+    :param table_name: Name of the table to check.
+    :return: True if the table exists, False otherwise.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT name FROM sqlite_master 
+        WHERE type='table' AND name=?
+    """, (table_name,))
+
+    table_exists = cursor.fetchone() is not None
+
+    cursor.close()
+    conn.close()
+
+    return table_exists
 
 def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     """
@@ -223,7 +250,7 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
                 item["max_tf"]
             )
         )
-
+    print("Passed this point")
     # 3) Insert headings_data (headings_data has columns: keyword, heading_text, heading_url, heading_title)
     cursor.execute("DELETE FROM headings_data WHERE keyword = ?", (keyword,))
     for heading in analysis.headings_data:
@@ -250,6 +277,13 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     #        kw_length INTEGER,
     #        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     #    );
+    table_name = "long_tail_keywords"
+
+    if check_table_exists("analysis_data.db", table_name):
+        print(f"Table '{table_name}' exists.")
+    else:
+        print(f"Table '{table_name}' does NOT exist.")
+
     cursor.execute("DELETE FROM long_tail_keywords WHERE keyword = ?", (keyword,))
     if hasattr(analysis, "long_tail_keywords") and analysis.long_tail_keywords:
         for lt in analysis.long_tail_keywords:
@@ -566,57 +600,148 @@ def is_not_branded(question, brands):
             return False
     return True
 
-# @app.post("/api/keyphrases")
-def get_keyphrases(user_query: str, raw_texts: List[str]) -> Dict[str, Any]:
-    """
-    Extract keyphrases from the given raw_texts, then compute:
-      1) Frequency of each keyphrase across all texts
-      2) Similarity of each keyphrase to the given user_query
-    Sort by similarity descending, and return the list.
-    """
-    # 1) Extract keyphrases from each text
-    all_keyphrases = extract_keyphrases_from_texts(
-        raw_texts,
-        model_name="bert-base-uncased",  # Adjust as needed
-        pooling="max"
-    )
 
+# Initialize the embedding model (ensure this is the same as used previously)
+# embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# RAKE and supporting functions (as provided)
+
+def is_noun_phrase(phrase: str, min_tokens: int = 2) -> bool:
+    tokens = nltk.word_tokenize(phrase)
+    if len(tokens) < min_tokens:
+        return False
+    tagged = nltk.pos_tag(tokens)
+    tree = chunk_parser.parse(tagged)
+    return (len(tree) == 1 and isinstance(tree[0], nltk.Tree) and
+            tree[0].label() == 'NP' and len(tree[0].leaves()) == len(tokens))
+
+def load_stop_words(stop_words_file_path: str) -> list:
+    with open(stop_words_file_path) as file:
+        return [word for line in file if not line.strip().startswith("#") 
+                for word in line.split()]
+
+def build_stop_word_regex(stop_words_file_path: str) -> re.Pattern:
+    stop_words = load_stop_words(stop_words_file_path)
+    regex_list = [r'\b' + re.escape(word) + r'(?![\w-])' for word in stop_words]
+    return re.compile('|'.join(regex_list), re.IGNORECASE)
+
+class RAKE:
+    def __init__(self, stop_words_file: str = 'SmartStoplist.txt'):
+        self.stop_words_pattern = build_stop_word_regex(stop_words_file)
+
+    def exec(self, text: str):
+        sentences = self.split_sentences(text)
+        phrases = self.generate_candidate_keywords(sentences)
+        word_scores = self.calculate_word_scores(phrases)
+        keyword_candidates = self.generate_candidate_keyword_scores(phrases, word_scores)
+        return sorted(keyword_candidates.items(), key=operator.itemgetter(1), reverse=True)
+
+    def split_sentences(self, text: str) -> list:
+        return re.split(u'[.!?,;:\t\\\\"\\(\\)\\\'\u2019\u2013]|\\s\\-\\s', text)
+
+    def generate_candidate_keywords(self, sentences: list) -> list:
+        phrases = []
+        for sentence in sentences:
+            parts = re.sub(self.stop_words_pattern, '|', sentence.strip()).split('|')
+            for phrase in parts:
+                phrase = phrase.strip().lower()
+                if phrase and is_noun_phrase(phrase):
+                    phrases.append(phrase)
+        return phrases
+
+    def is_number(self, s: str) -> bool:
+        try:
+            float(s) if '.' in s else int(s)
+            return True
+        except ValueError:
+            return False
+
+    def separate_words(self, text: str, word_min_size: int = 0) -> list:
+        words = re.split('[^a-zA-Z0-9_\\+\\-/]', text)
+        return [word.lower() for word in words if len(word) > word_min_size and not self.is_number(word)]
+
+    def calculate_word_scores(self, phrases: list) -> dict:
+        word_freq, word_degree = {}, {}
+        for phrase in phrases:
+            words = self.separate_words(phrase)
+            degree = len(words) - 1
+            for word in words:
+                word_freq[word] = word_freq.get(word, 0) + 1
+                word_degree[word] = word_degree.get(word, 0) + degree
+        return {word: (word_degree[word] + word_freq[word]) / word_freq[word] for word in word_freq}
+
+    def generate_candidate_keyword_scores(self, phrases: list, word_scores: dict) -> dict:
+        candidates = {}
+        for phrase in phrases:
+            candidates[phrase] = sum(word_scores[word] for word in self.separate_words(phrase))
+        return candidates
+
+def get_keyphrases(user_query: str, raw_texts: List[str]) -> Dict[str, Any]:
+    # 1) Extract keyphrases using RAKE + TF-IDF
+    tfidf_vectorizer = TfidfVectorizer(ngram_range=(1, 5), stop_words='english')
+    tfidf_matrix = tfidf_vectorizer.fit_transform(raw_texts)
+    features = tfidf_vectorizer.get_feature_names_out()
+    
+    all_keyphrases_data = {}  # phrase: max overall score
+    
+    for i, doc_text in enumerate(raw_texts):
+        rake_obj = RAKE()
+        rake_results = rake_obj.exec(doc_text)
+        
+        doc_vector = tfidf_matrix[i]
+        doc_tfidf_dict = {feature: doc_vector[0, idx] for idx, feature in enumerate(features)}
+        
+        seen_phrases = set()
+        for phrase, rake_score in rake_results:
+            if phrase in seen_phrases:
+                continue
+            seen_phrases.add(phrase)
+            
+            phrase_tfidf = doc_tfidf_dict.get(phrase, 0.0)
+            
+            if (rake_score + phrase_tfidf) == 0:
+                overall_score = 0.0
+            else:
+                overall_score = 2 * (rake_score * phrase_tfidf) / (rake_score + phrase_tfidf) * 10
+            
+            if phrase not in all_keyphrases_data or overall_score > all_keyphrases_data[phrase]:
+                all_keyphrases_data[phrase] = overall_score
+    
+    # Get top 100 phrases by overall score
+    sorted_phrases = sorted(all_keyphrases_data.items(), key=lambda x: x[1], reverse=True)[:100]
+    top_phrases = [phrase for phrase, _ in sorted_phrases]
+    all_keyphrases = [top_phrases]  # Format to match existing structure
+    
     # 2) Flatten the list of lists
     flattened_all_keyphrases = [kp for sublist in all_keyphrases for kp in sublist]
-
-    # 3) Build a frequency dict by combining all texts into one string
+    
+    # 3) Build frequency dict
     combined_text = " ".join(raw_texts).lower()
-    frequency_dict = {}
-    for kp in flattened_all_keyphrases:
-        freq_count = combined_text.count(kp.lower())
-        frequency_dict[kp] = frequency_dict.get(kp, 0) + freq_count
-
-    # 4) Compute similarity of each keyphrase to the user query
+    frequency_dict = {kp: combined_text.count(kp.lower()) for kp in flattened_all_keyphrases}
+    
+    # 4) Compute similarity to user query
     user_query_embedding = embedding_model.encode([user_query], convert_to_numpy=True)
     keyphrase_embeddings = embedding_model.encode(flattened_all_keyphrases, convert_to_numpy=True)
-    similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]  # shape (n_phrases,)
-
-    # 5) Build a structured list with all the data
-    seen_keyphrases = set()  # Track already-added keyphrases
+    similarity_scores = util.cos_sim(user_query_embedding, keyphrase_embeddings)[0]
+    
+    # 5) Build keyphrase objects
+    seen_keyphrases = set()
     keyphrase_objects = []
     for i, kp in enumerate(flattened_all_keyphrases):
-        kp_length = len(kp.split())
         sim = float(similarity_scores[i])
-        if sim >= 0.72 and kp not in seen_keyphrases:
-            obj = {
+        if sim >= 0.5 and kp not in seen_keyphrases:
+            keyphrase_objects.append({
                 "keyword": kp,
                 "relevanceScore": round(sim, 4),
                 "frequency": frequency_dict.get(kp, 0),
-                "kwLength": kp_length,
+                "kwLength": len(kp.split()),
                 "similarity": round(sim, 4),
-            }
-            keyphrase_objects.append(obj)
-            seen_keyphrases.add(kp)  # Mark this keyphrase as added
-
+            })
+            seen_keyphrases.add(kp)
+    
     # 6) Sort by similarity descending
     keyphrase_objects.sort(key=lambda x: x["similarity"], reverse=True)
-
-    # 7) Return them to the caller
+    
     return {
         "keyphrases": keyphrase_objects,
         "count": len(keyphrase_objects)
@@ -722,6 +847,23 @@ def analyze_keyword(input_data: AnalysisInput):
             for text, url, title in filtered_headings_data
         ]
 
+        # Add semantic similarity filtering
+        if filtered_headings_data:
+            from sentence_transformers import util
+        
+            # Encode question and headings
+            question_embedding = embedding_model.encode(question, convert_to_tensor=True)
+            headings_texts = [heading['text'] for heading in filtered_headings_data]
+            headings_embeddings = embedding_model.encode(headings_texts, convert_to_tensor=True)
+            
+            # Calculate similarities
+            similarities = util.cos_sim(question_embedding, headings_embeddings)
+            
+            # Filter headings with similarity > 0.65
+            filtered_headings_data = [
+                heading for idx, heading in enumerate(filtered_headings_data)
+                if similarities[0][idx].item() > 0.65
+            ]
         print("Headings data processed successfully")
     else:
         filtered_headings_data = []
