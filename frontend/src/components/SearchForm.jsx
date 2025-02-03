@@ -22,13 +22,6 @@ const SearchForm = ({ onSearch, onSeoScale }) => {
                 <button type="submit" className="btn btn-primary">
                     Start Analysis
                 </button>
-                <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={onSeoScale}
-                >
-                    SEO @ SCALE
-                </button>
             </form>
 
             {/* Right: Huge Title */}
