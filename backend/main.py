@@ -189,28 +189,6 @@ def fetch_cached_analysis(keyword: str) -> Optional[AnalysisResponse]:
     cached_data["top_terms"] = top_terms
 
     return AnalysisResponse(**cached_data)
-def check_table_exists(db_path: str, table_name: str) -> bool:
-    """
-    Check if a table exists in the SQLite database.
-    
-    :param db_path: Path to the SQLite database file.
-    :param table_name: Name of the table to check.
-    :return: True if the table exists, False otherwise.
-    """
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name=?
-    """, (table_name,))
-
-    table_exists = cursor.fetchone() is not None
-
-    cursor.close()
-    conn.close()
-
-    return table_exists
 
 def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     """
@@ -277,12 +255,6 @@ def store_analysis_in_db(keyword: str, analysis: AnalysisResponse):
     #        kw_length INTEGER,
     #        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     #    );
-    table_name = "long_tail_keywords"
-
-    if check_table_exists("analysis_data.db", table_name):
-        print(f"Table '{table_name}' exists.")
-    else:
-        print(f"Table '{table_name}' does NOT exist.")
 
     cursor.execute("DELETE FROM long_tail_keywords WHERE keyword = ?", (keyword,))
     if hasattr(analysis, "long_tail_keywords") and analysis.long_tail_keywords:
@@ -847,17 +819,15 @@ def analyze_keyword(input_data: AnalysisInput):
             for text, url, title in filtered_headings_data
         ]
 
-        # Add semantic similarity filtering
         if filtered_headings_data:
-            from sentence_transformers import util
-        
-            # Encode question and headings
-            question_embedding = embedding_model.encode(question, convert_to_tensor=True)
+            
+            # Encode keyword and headings
+            keyword_embedding = embedding_model.encode(keyword, convert_to_tensor=True)
             headings_texts = [heading['text'] for heading in filtered_headings_data]
             headings_embeddings = embedding_model.encode(headings_texts, convert_to_tensor=True)
             
-            # Calculate similarities
-            similarities = util.cos_sim(question_embedding, headings_embeddings)
+            # Calculate similarities between keyword and headings
+            similarities = util.cos_sim(keyword_embedding, headings_embeddings)
             
             # Filter headings with similarity > 0.65
             filtered_headings_data = [

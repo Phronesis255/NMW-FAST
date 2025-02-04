@@ -148,14 +148,15 @@ def generate_section_content(llm, keyword, title, section_outline, target_audien
         Focus Keyword: {KEYWORD} - Integrate this keyword naturally throughout the text, ensuring optimal keyword density without overstuffing.
         Title of the Blog Post: {TITLE} - Write content aligned with the overall theme and relevance of the title.
         Section Outline: {SECTION_OUTLINE} - Follow this outline to maintain coherence and logical progression.
-        Target Audience: {TARGET_AUDIENCE} - Tailor the tone, style, and complexity of the content to resonate with this specific audience.
-        Tone: {TONE} - Write in this tone, whether it is professional, conversational, or inspirational.
+        Your audience are mainly {TARGET_AUDIENCE}. Consider this when writing and match your content to resonate with this specific audience: write what they want to know.
+        Use a {TONE} tone to write the section. Unless the tone demands it, avoid effusive language, hyperbole, and salesy language.
 
-        Additional Requirements:
-        - Provide information-rich content supported by credible data, including statistics, case studies, and references to reputable industry reports.
+        You must:
+        - Provide information-rich content supported by credible data, including statistics, case studies, and references to reputable industry reports (name the references if possible).
         - Use real-world examples to enhance relatability and reader engagement.
-        - Avoid vague generalizations or repetitive content.
-        - Offer practical tips, strategies, or actionable insights wherever possible to enrich the reader’s understanding.
+        - Try to keep the reading difficulty level low. Aim for a high-school reading difficulty level, prioritizing simplicity, directness, and zero-fluff attitude.
+        - Avoid low-value content like fluff, generalizations, or repetitive phrases.
+        - Offer practical tips, strategies, or actionable insights wherever possible to enrich the reader's understanding.
         - Ensure that the content aligns with best SEO practices to maximize visibility and reader retention.
 
         Provide the text in Markdown format, without repeating the heading verbatim. 
@@ -242,8 +243,8 @@ def create_blog_post(
     llm,
     keyword, 
     title,
-    target_audience="General Audience",
-    tone="professional",
+    target_audience="lawyers",
+    tone="approachable and professional",
     model_name="gpt-4o-mini", 
     output_file="blog_post.md"
 ):
