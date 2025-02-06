@@ -3,6 +3,7 @@
 import os
 import re
 from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEndpoint
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 import time
@@ -19,8 +20,8 @@ nltk.download('punkt')
 
 # --------------------------------------------
 # llm_model = "HG-Qwen-2.5-72B-Instruct"
-# llm_model = "HG-Llama-3.2-3B-Instruct"
-llm_model = "gpt-4o-mini"
+llm_model = "HG-Llama-3.3-70B-Instruct"
+# llm_model = "gpt-4o-mini"
 # llm_model = "gpt-4o"
 # llm_model = "o1-mini"
 
@@ -29,8 +30,19 @@ load_dotenv()
 OPENAI = os.getenv("OPENAI_API_KEY")
 HUGGINGFACEHUB_API_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 print(OPENAI)
-# Initialize LLM and embedding model
-llm = ChatOpenAI(model=llm_model, temperature=1, api_key=OPENAI)
+
+if llm_model.startswith("HG"):
+    llm = HuggingFaceEndpoint(
+        repo_id="meta-llama/Llama-3.2-3B-Instruct",  #"meta-llama/Llama-3.2-3B-Instruct"
+        task="text-generation",
+        temperature=0.7,
+        huggingfacehub_api_token=HUGGINGFACEHUB_API_TOKEN,
+        cache=False
+    )
+else:
+    # llm = ChatOpenAI(model=llm_model, temperature=0.5, api_key=OPENAI)
+    llm = ChatOpenAI(model=llm_model, temperature=1, api_key=OPENAI)
+
 
 
 def compute_reading_difficulty(blog_post):
@@ -182,7 +194,10 @@ def generate_section_content(llm, keyword, title, section_outline, target_audien
     })
     then=time.time()
     print(f"Generated section in {then-now:.2f} seconds.")
-    return content.content.strip()
+    if llm_model.startswith("HG"):
+        return content.strip()
+    else:
+        return content.content.strip()
 
 def parse_outline(outline_text):
     """

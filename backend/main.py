@@ -832,7 +832,7 @@ def analyze_keyword(input_data: AnalysisInput):
             # Filter headings with similarity > 0.65
             filtered_headings_data = [
                 heading for idx, heading in enumerate(filtered_headings_data)
-                if similarities[0][idx].item() > 0.65
+                if similarities[0][idx].item() > 0.60
             ]
         print("Headings data processed successfully")
     else:
