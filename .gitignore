@@ -3,3 +3,6 @@ glove.6B.100d.txt
 backend/__pycache__/hcuke.cpython-310.pyc
 backend/__pycache__/generator.cpython-310.pyc
 backend/.DS_Store
+frontend/node_modules/.bin/*.*
+frontend\node_modules\.bin
+frontend/node_modules/.bin/browserslist
