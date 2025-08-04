@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+requests
+beautifulsoup4
+pandas
+numpy
+spacy
+scikit-learn
+sentence-transformers
+transformers
+python-dotenv
+nltk
+textstat
+langchain
+langchain-openai
+langchain-huggingface
